@@ -56,9 +56,50 @@ Client                                Server
 ```
 
 - Token hợp lệ → truy cập tool bình thường
-- Thiếu token → `401`
-- Token sai → `403`
+- Thiếu token → `401 Unauthorized`
+- Token sai → `401 Unauthorized`
+- `403 Forbidden` chỉ xảy ra khi token hợp lệ nhưng thiếu scope yêu cầu
 - Logic tool không biết gì về auth — SDK xử lý ở tầng transport
+
+### Kiểm thử token thủ công (PowerShell)
+
+Mở **Terminal 1** và khởi động server với một token demo chỉ dùng local:
+
+```powershell
+$env:MCP_AUTH_TOKEN = "local-demo-token-123"
+python auth_server.py
+```
+
+Ở **Terminal 2**, đặt cùng token rồi chạy client:
+
+```powershell
+$env:MCP_AUTH_TOKEN = "local-demo-token-123"
+python auth_client.py
+```
+
+Kết quả đúng: client liệt kê được tool và in kết quả `Hanoi: 29°C, trời mưa`.
+
+Test token sai bằng cách đặt token khác với Terminal 1:
+
+```powershell
+$env:MCP_AUTH_TOKEN = "wrong-token"
+python auth_client.py
+```
+
+Kết quả mong đợi: request bị từ chối với `401 Unauthorized`, trước khi
+client gọi được `list_tools`.
+
+Test thiếu hoàn toàn header `Authorization` bằng `curl.exe`:
+
+```powershell
+curl.exe -i -X POST http://localhost:8000/mcp `
+  -H "Content-Type: application/json" `
+  --data-raw "{}"
+```
+
+Kết quả mong đợi: `401 Unauthorized`. Lệnh này cố ý không gửi header
+`Authorization`, nên kiểm tra được trường hợp thiếu token thay vì gửi
+`Bearer ` rỗng.
 
 ---
 

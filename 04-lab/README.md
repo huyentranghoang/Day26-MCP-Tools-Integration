@@ -13,11 +13,43 @@ A weather agent built with Google ADK that connects to an MCP server via Streama
 
 ## Tools
 
-| Tool | Description |
-|------|-------------|
-| `get_current_weather(city)` | Get current weather conditions for a city |
-| `get_forecast(city, days)` | Get weather forecast (1–3 days) |
-| `health_check()` | Verify server is running |
+The server publishes three MCP tools. Their input/output contracts are:
+
+### `get_current_weather`
+
+- **Input:** `city: string` — city name, for example `Hanoi` or `Sydney`.
+- **Output:** `string` containing the location, temperature in Celsius and
+  Fahrenheit, feels-like temperature, condition, humidity, wind, pressure, UV,
+  visibility, and last-updated time.
+- **Error output:** a readable error string when `WEATHERAPI_KEY` is missing,
+  the city is invalid, or WeatherAPI cannot be reached.
+
+Example success output:
+
+```text
+Current Weather for Hanoi, Hanoi, Vietnam:
+Temperature: 29.0°C (84.2°F)
+Condition: Partly cloudy
+Humidity: 70%
+Wind: 12.0 km/h (7.5 mph) SE
+```
+
+### `get_forecast`
+
+- **Input:** `city: string` and optional `days: integer` (default `3`).
+- **Validation:** `days` is limited to the free-tier range `1–3`.
+- **Output:** `string` containing one forecast block per day, including date,
+  high/low temperature, condition, chance of rain, maximum wind, and UV index.
+- **Error output:** a readable error string when `WEATHERAPI_KEY` is missing,
+  the city is invalid, or WeatherAPI cannot be reached.
+
+### `health_check`
+
+- **Input:** none.
+- **Output:** the string
+  `✅ Weather MCP Server is running and ready to provide worldwide weather data.`
+- **Purpose:** verifies that the MCP server is running without calling
+  WeatherAPI.
 
 ## ADK làm gì trong Lab này?
 
