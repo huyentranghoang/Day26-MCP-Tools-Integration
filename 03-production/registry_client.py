@@ -37,11 +37,29 @@ from mcp.client.streamable_http import streamable_http_client
 REGISTRY_PATH = Path(__file__).parent / "registry.json"
 
 
+def configure_console() -> None:
+    """Keep Vietnamese output working on Windows' legacy console."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
+def parse_version(version: str) -> tuple[int, ...]:
+    """Convert a semantic version into a sortable tuple."""
+    try:
+        parts = tuple(int(part) for part in version.split("."))
+    except ValueError as exc:
+        raise ValueError(f"Version không hợp lệ: {version!r}") from exc
+    if not parts:
+        raise ValueError("Version không được để trống")
+    return parts
+
+
 class ToolRegistry:
     """Danh mục trung tâm — agent tra cứu tool theo tag, tên, hoặc mô tả."""
 
     def __init__(self, path: Path = REGISTRY_PATH) -> None:
-        with open(path) as f:
+        with path.open(encoding="utf-8") as f:
             data = json.load(f)
         self.tools: dict[str, dict] = data["tools"]
         self.servers: dict[str, dict] = data["servers"]
@@ -78,7 +96,7 @@ class ToolRegistry:
             raise KeyError(f"Không tìm thấy tool (tag={tag}, keyword={keyword})")
         active = [r for r in results if not r["deprecated"]]
         candidates = active or results
-        return max(candidates, key=lambda r: r["version"])
+        return max(candidates, key=lambda r: parse_version(r["version"]))
 
 
 async def connect_and_call(match: dict, tool_args: dict) -> str:
@@ -87,9 +105,12 @@ async def connect_and_call(match: dict, tool_args: dict) -> str:
     tool_name = match["tool"]
 
     if server.get("transport") == "stdio":
+        server_args = list(server["args"])
+        if server_args and not Path(server_args[0]).is_absolute():
+            server_args[0] = str((REGISTRY_PATH.parent / server_args[0]).resolve())
         params = StdioServerParameters(
             command=sys.executable,
-            args=server["args"],
+            args=server_args,
         )
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
@@ -151,4 +172,5 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
+    configure_console()
     asyncio.run(main())

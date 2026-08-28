@@ -8,6 +8,13 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
+def configure_console() -> None:
+    """Keep Vietnamese output working on Windows' legacy console."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 async def main() -> None:
     params = StdioServerParameters(command=sys.executable, args=["versioned_server.py"])
 
@@ -44,4 +51,5 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
+    configure_console()
     asyncio.run(main())

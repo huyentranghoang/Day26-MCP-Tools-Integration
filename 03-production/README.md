@@ -27,12 +27,18 @@ Server chạy qua **Streamable HTTP** thay vì stdio, kèm bearer token verifica
 
 ```bash
 # Terminal 1 — khởi động server
+# Windows PowerShell: $env:MCP_AUTH_TOKEN="dev-token-abc123"
 python auth_server.py
 # Server lắng nghe tại http://localhost:8000/mcp
 
 # Terminal 2 — client kết nối kèm token
 python auth_client.py
 ```
+
+`MCP_AUTH_TOKEN` cấu hình token hợp lệ và `MCP_SERVER_URL` đổi endpoint
+(mặc định lần lượt là `dev-token-abc123` và
+`http://localhost:8000/mcp`). Token mặc định chỉ dành cho demo local; production
+cần thay `StaticTokenVerifier` bằng JWT/OAuth và không hard-code secret.
 
 Luồng:
 

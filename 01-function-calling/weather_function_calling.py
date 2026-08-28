@@ -9,12 +9,16 @@ Cách chạy:
     python weather_function_calling.py
 """
 
+import argparse
+import json
+import os
+import sys
+
 from google import genai
 from google.genai import types
 
-client = genai.Client()
-
 MODEL = "gemini-2.5-flash"
+MAX_TOOL_ROUNDS = 5
 
 SYSTEM_INSTRUCTION = (
     "Bạn là trợ lý thời tiết thân thiện, trả lời bằng tiếng Việt tự nhiên. "
@@ -41,6 +45,23 @@ get_weather_declaration = types.FunctionDeclaration(
 TOOLS = [types.Tool(function_declarations=[get_weather_declaration])]
 
 
+def configure_console() -> None:
+    """Keep Vietnamese output working on Windows' legacy console."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
+def create_client() -> genai.Client:
+    """Create the Gemini client only when a request is actually made."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "Thiếu GEMINI_API_KEY. Hãy đặt biến môi trường trước khi chạy."
+        )
+    return genai.Client(api_key=api_key)
+
+
 # 2. App tự thực thi tool (trong thực tế sẽ gọi API thời tiết thật)
 def get_weather(city: str) -> str:
     """Trả về thời tiết (mock) của *city*. Dùng làm tool cho model."""
@@ -64,37 +85,52 @@ def get_weather(city: str) -> str:
             "gió": {"hướng": "Đông", "tốc_độ": "10 km/h"},
         },
     }
-    import json
-
     default = {"nhiệt_độ": "28°C", "thời_tiết": "không có dữ liệu chi tiết"}
     return json.dumps({"city": city, **mock_data.get(city, default)}, ensure_ascii=False)
 
 
-def run(prompt: str) -> str:
+def run(prompt: str, client: genai.Client | None = None) -> str:
     """Gửi *prompt* tới Gemini, tự động xử lý function calling và trả về câu trả lời cuối."""
+    if not prompt.strip():
+        raise ValueError("Prompt không được để trống.")
+
+    client = client or create_client()
     contents: list[types.Content] = [
         types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
     ]
 
-    # 3. Gọi model — model quyết định có gọi tool hay không
-    resp = client.models.generate_content(
-        model=MODEL,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            tools=TOOLS,
-            system_instruction=SYSTEM_INSTRUCTION,
-        ),
-    )
+    def generate() -> types.GenerateContentResponse:
+        # 3. Gọi model — model quyết định có gọi tool hay không
+        return client.models.generate_content(
+            model=os.getenv("GEMINI_MODEL", MODEL),
+            contents=contents,
+            config=types.GenerateContentConfig(
+                tools=TOOLS,
+                system_instruction=SYSTEM_INSTRUCTION,
+            ),
+        )
 
     # 4. Vòng lặp: nếu model yêu cầu tool, app TỰ THỰC THI rồi đưa kết quả trả lại
-    while resp.function_calls:
+    for _ in range(MAX_TOOL_ROUNDS):
+        resp = generate()
+        if not resp.function_calls:
+            return resp.text or "Model không trả về nội dung."
+
         # Thêm phản hồi của model vào lịch sử hội thoại
+        if not resp.candidates:
+            raise RuntimeError("Gemini trả về function call nhưng thiếu candidate.")
         contents.append(resp.candidates[0].content)
 
         function_responses = []
         for fc in resp.function_calls:
             print(f"  [model yêu cầu] {fc.name}({fc.args})")
-            result = get_weather(**fc.args)  # <-- app chạy, không phải model
+            if fc.name != "get_weather":
+                result = json.dumps(
+                    {"error": f"Tool không được hỗ trợ: {fc.name}"},
+                    ensure_ascii=False,
+                )
+            else:
+                result = get_weather(**fc.args)  # <-- app chạy, không phải model
             print(f"  [app thực thi]  -> {result}")
             function_responses.append(
                 types.Part.from_function_response(
@@ -104,20 +140,23 @@ def run(prompt: str) -> str:
 
         # Gửi kết quả tool trả về cho model
         contents.append(types.Content(role="user", parts=function_responses))
-        resp = client.models.generate_content(
-            model=MODEL,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                tools=TOOLS,
-                system_instruction=SYSTEM_INSTRUCTION,
-            ),
-        )
 
-    # 5. Model tổng hợp câu trả lời cuối
-    return resp.text
+    raise RuntimeError("Model vượt quá số vòng gọi tool cho phép.")
 
 
 if __name__ == "__main__":
-    question = "Thời tiết Hà Nội và Đà Nẵng hôm nay thế nào?"
+    configure_console()
+    parser = argparse.ArgumentParser(description="Demo Gemini Function Calling")
+    parser.add_argument(
+        "prompt",
+        nargs="*",
+        help="Câu hỏi thời tiết; bỏ trống để dùng câu hỏi mẫu",
+    )
+    args = parser.parse_args()
+    question = " ".join(args.prompt) or "Thời tiết Hà Nội và Đà Nẵng hôm nay thế nào?"
     print(f"User: {question}\n")
-    print("Trả lời:", run(question))
+    try:
+        print("Trả lời:", run(question))
+    except (RuntimeError, ValueError) as exc:
+        print(f"Lỗi: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc

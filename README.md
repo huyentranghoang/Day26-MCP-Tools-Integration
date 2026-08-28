@@ -1,4 +1,8 @@
-# Phân biệt MCP và Function Calling
+# MCP Weather Lab — Function Calling, MCP và Production
+
+Repo thực hành bằng Python để hiểu từ đầu đến cuối cách một LLM sử dụng tool:
+Function Calling ở tầng model, MCP ở tầng giao tiếp client–server, rồi mở rộng
+sang authentication, registry, versioning và một agent Google ADK.
 
 Đây là hai khái niệm hay bị nhầm lẫn nhưng thực ra ở **hai tầng khác nhau**, và **bổ sung cho nhau** chứ không thay thế.
 
@@ -18,27 +22,43 @@ day26-mcp/
 │   ├── weather_server.py
 │   └── weather_client.py
 │
-└── 03-production/           ← Bước 3: Auth, Tool Registry, Versioning
+├── 03-production/           ← Bước 3: Auth, Tool Registry, Versioning
+│   ├── README.md
+│   ├── auth_server.py
+│   ├── auth_client.py
+│   ├── registry.json
+│   ├── registry_client.py
+│   ├── versioned_server.py
+│   └── versioned_client.py
+└── 04-lab/                  ← Bước 4: Google ADK + MCP Streamable HTTP
     ├── README.md
-    ├── auth_server.py
-    ├── auth_client.py
-    ├── registry.json
-    ├── registry_client.py
-    └── versioned_server.py
+    ├── mcp-server/          ← WeatherAPI-backed MCP server
+    └── mcp-client/          ← ADK agent dùng remote MCP tools
 ```
 
 ## Quick start
 
+Yêu cầu: Python 3.10+ cho lab 01–03; Python 3.12+ cho client của lab 04.
+
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+python -m venv .venv
+# macOS/Linux:
+source .venv/bin/activate
+# Windows PowerShell:
+# .venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 
 # MCP demo (không cần API key)
-cd 02-mcp-basics && python weather_client.py
+cd 02-mcp-basics
+python weather_client.py
+cd ..
 
 # Function Calling (cần Gemini API key)
-export GEMINI_API_KEY=...
-cd 01-function-calling && python weather_function_calling.py
+# macOS/Linux: export GEMINI_API_KEY=...
+# Windows PowerShell: $env:GEMINI_API_KEY="..."
+cd 01-function-calling
+python weather_function_calling.py
+cd ..
 
 # Production — Auth (2 terminal)
 cd 03-production
@@ -46,8 +66,36 @@ python auth_server.py              # terminal 1
 python auth_client.py              # terminal 2
 
 # Production — Tool Registry
-cd 03-production && python registry_client.py
+python registry_client.py
 ```
+
+Để chạy lab 04, xem hướng dẫn riêng tại
+[`04-lab/README.md`](04-lab/README.md). Lab này cần `WEATHERAPI_KEY` và
+`GOOGLE_API_KEY`; không commit file `.env`.
+
+## Lộ trình học
+
+| Lab | Kết quả |
+|---|---|
+| [01](01-function-calling/) | Tự khai báo schema và tự thực thi function calling |
+| [02](02-mcp-basics/) | MCP server/client qua stdio, schema tự sinh |
+| [03](03-production/) | Bearer auth, tool registry và backward compatibility |
+| [04](04-lab/) | Agent Google ADK gọi MCP server qua Streamable HTTP |
+
+Các demo 01–03 dùng dữ liệu mock nên chạy offline. Lab 04 gọi WeatherAPI thật;
+chạy `python 04-lab/mcp-client/verify_setup.py` để kiểm tra cấu hình.
+
+## Kiểm thử
+
+Sau khi cài dependency, chạy:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+MCP được khóa ở nhánh `1.x` (`<2.0.0`) vì Google ADK hiện dùng các module
+`mcp.shared.*` của SDK này. Khi nâng major version, cần kiểm tra lại ADK và
+transport trước khi bỏ giới hạn.
 
 ---
 

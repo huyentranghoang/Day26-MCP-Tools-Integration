@@ -17,9 +17,15 @@ User hỏi  →  Model quyết định gọi get_weather(city="Hà Nội")
 
 ```bash
 pip install -r ../requirements.txt
-export GEMINI_API_KEY=...
-python weather_function_calling.py
+# macOS/Linux:
+export GEMINI_API_KEY="your_key"
+# Windows PowerShell:
+# $env:GEMINI_API_KEY="your_key"
+python weather_function_calling.py "Thời tiết Hà Nội hôm nay?"
 ```
+
+Nếu không truyền câu hỏi, chương trình dùng prompt mẫu. API key chỉ được đọc
+từ biến môi trường và không được lưu trong source code.
 
 ## File
 

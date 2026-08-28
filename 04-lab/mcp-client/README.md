@@ -49,9 +49,10 @@ uv run python weather.py
 ```bash
 cd mcp-client
 
-# Create .env file with your Google API key
-# Get free key from: https://aistudio.google.com/apikey
-echo "GOOGLE_API_KEY=your_google_api_key_here" > .env
+# Copy .env.example to .env and fill in your Google API key
+# Get a free key from: https://aistudio.google.com/apikey
+# macOS/Linux: cp .env.example .env
+# Windows PowerShell: Copy-Item .env.example .env
 ```
 
 ### 3. Install Dependencies
@@ -63,6 +64,7 @@ uv sync
 ### 4. Run the Agent
 
 ```bash
+uv run python verify_setup.py
 uv run adk web
 ```
 
@@ -91,21 +93,11 @@ mcp-client/
 
 ### Agent Configuration
 
-In `weather_agent/agent.py`:
+The endpoint and model are configured with environment variables in `.env`:
 
-```python
-MCP_SERVER_URL = "http://localhost:8085/mcp"
-
-connection_params = StreamableHTTPConnectionParams(
-    url=MCP_SERVER_URL,
-    timeout=30.0,
-)
-
-root_agent = Agent(
-    name="weather_agent",
-    model="gemini-2.5-flash",
-    tools=[weather_tools],
-)
+```dotenv
+MCP_SERVER_URL=http://localhost:8085/mcp
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 ## Troubleshooting
@@ -117,7 +109,8 @@ root_agent = Agent(
    - Check `MCP_SERVER_URL` in `agent.py`
 
 2. **405 errors**: Port conflict with another application
-   - Check what's running on the port: `lsof -i :8085`
+   - macOS/Linux: `lsof -i :8085`
+   - Windows PowerShell: `Get-NetTCPConnection -LocalPort 8085`
    - Change port in both server and client if needed
 
 3. **Timeout errors**: Server not started
@@ -125,14 +118,15 @@ root_agent = Agent(
 
 ### Fallback Mode
 
-If MCP connection fails, the agent runs in fallback mode without tools.
-Fix the connection and restart ADK web.
+If MCP connection fails, the agent starts in fallback mode without tools.
+Fix the connection, run `verify_setup.py`, and restart ADK web.
 
 ## Environment Variables
 
 Create `.env` file:
 ```bash
 GOOGLE_API_KEY=your_gemini_api_key
+MCP_SERVER_URL=http://localhost:8085/mcp
 ```
 
 ## Resources

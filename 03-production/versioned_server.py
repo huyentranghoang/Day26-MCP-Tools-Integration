@@ -17,11 +17,11 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.fastmcp import FastMCP
 
 SERVER_VERSION = "2.0.0"
 
-mcp = MCPServer(
+mcp = FastMCP(
     "weather-v2",
     instructions=f"Weather MCP Server v{SERVER_VERSION}. "
     "Hỗ trợ get_weather (v1, backward compat) và get_weather_v2 (chi tiết hơn).",
@@ -75,6 +75,16 @@ def get_weather_v2(
         include_forecast: Có trả thêm dự báo 2 ngày tới không (mặc định: False)
         units: Đơn vị nhiệt độ — "celsius" hoặc "fahrenheit" (mặc định: celsius)
     """
+    if units not in {"celsius", "fahrenheit"}:
+        return json.dumps(
+            {
+                "city": city,
+                "error": "units phải là 'celsius' hoặc 'fahrenheit'",
+                "api_version": "2.0",
+            },
+            ensure_ascii=False,
+        )
+
     data = _MOCK_DB.get(city)
     if not data:
         return json.dumps(

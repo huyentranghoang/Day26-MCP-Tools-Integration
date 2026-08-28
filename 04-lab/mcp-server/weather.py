@@ -1,32 +1,36 @@
 from typing import Any
-import asyncio
 import httpx
 import os
+import logging
 from mcp.server.fastmcp import FastMCP
 
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
+logger = logging.getLogger("weather-mcp")
+
+HOST = os.getenv("HOST", "0.0.0.0")
+PORT = int(os.getenv("PORT", "8085"))
+TRANSPORT = os.getenv("MCP_TRANSPORT", "streamable-http")
+
 # Initialize FastMCP server
-port = int(os.getenv("PORT", 8085))
-mcp = FastMCP("weather", host="0.0.0.0", port=port)
+mcp = FastMCP("weather", host=HOST, port=PORT)
 
 # Constants
 WEATHERAPI_BASE = "https://api.weatherapi.com/v1"
 USER_AGENT = "weather-app/1.0"
 
-# Get API key from environment variable
-API_KEY = os.getenv("WEATHERAPI_KEY")
-
 async def make_weather_request(endpoint: str, params: dict[str, str]) -> dict[str, Any] | None:
     """Make a request to the WeatherAPI with proper error handling."""
     # Check if API key is set
-    if not API_KEY:
-        print("ERROR: WeatherAPI key not set. Please set WEATHERAPI_KEY environment variable.")
+    api_key = os.getenv("WEATHERAPI_KEY")
+    if not api_key:
+        logger.error("WeatherAPI key not set. Set WEATHERAPI_KEY.")
         return None
         
     headers = {
         "User-Agent": USER_AGENT,
     }
     # Add API key to parameters
-    params["key"] = API_KEY
+    params["key"] = api_key
     
     url = f"{WEATHERAPI_BASE}/{endpoint}"
     
@@ -36,13 +40,13 @@ async def make_weather_request(endpoint: str, params: dict[str, str]) -> dict[st
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as e:
-            print(f"HTTP Error {e.response.status_code}: {e.response.text}")
+            logger.error("WeatherAPI returned HTTP %s: %s", e.response.status_code, e.response.text)
             return None
         except httpx.RequestError as e:
-            print(f"Request Error: {e}")
+            logger.error("WeatherAPI request failed: %s", e)
             return None
         except Exception as e:
-            print(f"Unexpected error: {e}")
+            logger.exception("Unexpected WeatherAPI error: %s", e)
             return None
 
 @mcp.tool()
@@ -60,7 +64,7 @@ async def get_current_weather(city: str) -> str:
     data = await make_weather_request("current.json", params)
 
     if not data:
-        if not API_KEY:
+        if not os.getenv("WEATHERAPI_KEY"):
             return f"❌ WeatherAPI key not configured. Please set WEATHERAPI_KEY environment variable with your API key from weatherapi.com"
         return f"Unable to fetch current weather data for {city}. Please check the city name and API key configuration."
 
@@ -90,8 +94,8 @@ async def get_forecast(city: str, days: int = 3) -> str:
         city: City name (e.g., "Hanoi", "Haiphong", "Danang", "Brisbane", "Sydney", "Melbourne")
         days: Number of days to forecast (1-3 for free tier, max 10 for paid)
     """
-    # Limit days to 3 for free tier
-    days = min(days, 3)
+    # Limit days to 1–3 for the free tier.
+    days = max(1, min(days, 3))
     
     params = {
         "q": city,
@@ -103,7 +107,7 @@ async def get_forecast(city: str, days: int = 3) -> str:
     data = await make_weather_request("forecast.json", params)
 
     if not data:
-        if not API_KEY:
+        if not os.getenv("WEATHERAPI_KEY"):
             return f"❌ WeatherAPI key not configured. Please set WEATHERAPI_KEY environment variable with your API key from weatherapi.com"
         return f"Unable to fetch forecast data for {city}. Please check the city name and API key configuration."
 
@@ -133,20 +137,15 @@ UV Index: {day_data['uv']}
 @mcp.tool()
 async def health_check() -> str:
     """Health check endpoint for deployment verification."""
-    return "✅ Weather MCP Server is running! Ready to provide weather data for Australian cities and worldwide."
+    return "✅ Weather MCP Server is running and ready to provide worldwide weather data."
 
-print("✅ MCP server initialized with Streamable HTTP transport")
-print("🔧 Available tools: get_current_weather, get_forecast, health_check")
+logger.info("MCP server initialized with %s transport", TRANSPORT)
+logger.info("Available tools: get_current_weather, get_forecast, health_check")
 
 if __name__ == "__main__":
-    import sys
-    
-    is_cloud_run = bool(os.getenv("PORT"))
-    is_standalone = len(sys.argv) == 1 and sys.stdin.isatty()
-    
-    if is_cloud_run or is_standalone:
-        print(f"🚀 Starting MCP server on http://0.0.0.0:{port}/mcp")
+    if TRANSPORT == "streamable-http":
+        logger.info("Starting MCP server on http://%s:%s/mcp", HOST, PORT)
         mcp.run(transport="streamable-http")
     else:
-        print("Starting FastMCP server in stdio mode for local client", file=sys.stderr)
+        logger.info("Starting MCP server in stdio mode")
         mcp.run()
